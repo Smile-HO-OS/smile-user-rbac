@@ -33,6 +33,9 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
+      // `vi.mocked(repository.someMethod)` reads a method off an interface
+      // purely to narrow its type for mocking, never to call it unbound.
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 );

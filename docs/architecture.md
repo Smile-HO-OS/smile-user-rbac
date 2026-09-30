@@ -1,5 +1,8 @@
 # Architecture
 
+For the system overview, request flow and step-by-step integration, see
+[integration-guide.md](./integration-guide.md).
+
 ## Repository abstraction
 
 Every entity (`User`, `Role`, `Permission`) is defined by two things in this
@@ -34,11 +37,22 @@ a `Symbol` token (`USER_REPOSITORY`, `ROLE_REPOSITORY`,
 
 ## How an application plugs in its repository
 
-Each module is a NestJS _dynamic module_: `UserModule.forRoot(...)`,
-`RoleModule.forRoot(...)`, `PermissionModule.forRoot(...)`, composed by the
-top-level `UserRbacModule.forRoot(...)`. The consuming application supplies a
-`Provider` for each token — most commonly `useClass` pointing at its own
-Prisma-backed implementation:
+`UserRbacModule.forRoot(...)` is the only dynamic module a consuming
+application touches. Internally, it imports a `@Global()` `RepositoriesModule.forRoot(...)`
+that registers all five repository providers — `USER_REPOSITORY`,
+`ROLE_REPOSITORY`, `PERMISSION_REPOSITORY`, `USER_ROLE_REPOSITORY`,
+`ROLE_PERMISSION_REPOSITORY` — exactly once, then imports the plain
+`UserModule`/`RoleModule`/`PermissionModule`/`AuthorizationModule`, whose
+services `@Inject()` those tokens directly. This matters because some
+services need a repository that "belongs" to another entity — `RoleService`
+checks `USER_REPOSITORY` before assigning a role, `PermissionService` checks
+`ROLE_REPOSITORY` before assigning a permission — and registering each
+provider once, package-wide, means every service sees the same instance
+instead of each feature module instantiating its own copy of e.g.
+`PrismaUserRepository`.
+
+The consuming application supplies a `Provider` for each token — most
+commonly `useClass` pointing at its own Prisma-backed implementation:
 
 ```typescript
 // inside e.g. the Support application
@@ -61,6 +75,14 @@ class PrismaUserRepository implements IUserRepository {
       permissionRepositoryProvider: {
         provide: PERMISSION_REPOSITORY,
         useClass: PrismaPermissionRepository,
+      },
+      userRoleRepositoryProvider: {
+        provide: USER_ROLE_REPOSITORY,
+        useClass: PrismaUserRoleRepository,
+      },
+      rolePermissionRepositoryProvider: {
+        provide: ROLE_PERMISSION_REPOSITORY,
+        useClass: PrismaRolePermissionRepository,
       },
     }),
   ],
@@ -87,8 +109,6 @@ landing later.
 
 - `dto/` folders (HTTP-facing, `class-validator`-decorated request/response
   shapes) — added when controllers/CRUD land.
-- `guards/` and `decorators/` (`@RequirePermission()`, `@RequireRole()`) —
-  added once `AuthorizationService` has a real implementation to guard with.
 - `PermissionResource` enum — deliberately not created; resource names
   (`ticket`, `booking`, ...) are per-application vocabulary and are passed as
   plain strings so this package never needs to change when an application

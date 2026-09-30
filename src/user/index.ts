@@ -3,3 +3,4 @@ export * from './user.service';
 export * from './interfaces';
 export * from './repositories';
 export * from './enums';
+export * from './exceptions';

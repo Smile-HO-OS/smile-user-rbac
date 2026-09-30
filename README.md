@@ -50,9 +50,12 @@ Each of `user/`, `role/`, `permission/` follows the same internal shape:
 - `interfaces/` — the entity shape (`IUser`, `IRole`, `IPermission`).
 - `repositories/` — the repository _contract_ (`IUserRepository`, ...) plus
   its create/update input shapes. No implementation lives here.
-- `<name>.service.ts` — DI-wired, method bodies land in a later phase.
-- `<name>.module.ts` — a dynamic module (`forRoot(...)`) that binds the
-  app-supplied repository provider to the module's injection token.
+- `<name>.service.ts` — implements the module's use cases against its
+  repository interface(s), injected via `@Inject()`.
+- `<name>.module.ts` — a plain module declaring the service. The repository
+  providers it injects are registered once, package-wide, by
+  `RepositoriesModule` inside `UserRbacModule.forRoot(...)` — see
+  [`docs/architecture.md`](docs/architecture.md).
 
 `dto/`, `guards/`, `decorators/`, `constants/` and `enums/` at the top level
 from the originally proposed tree were deliberately **not** created yet —
@@ -75,6 +78,8 @@ import {
   USER_REPOSITORY,
   ROLE_REPOSITORY,
   PERMISSION_REPOSITORY,
+  USER_ROLE_REPOSITORY,
+  ROLE_PERMISSION_REPOSITORY,
 } from '@shree-maruti/nestjs-user-rbac';
 
 @Module({
@@ -91,6 +96,14 @@ import {
       permissionRepositoryProvider: {
         provide: PERMISSION_REPOSITORY,
         useClass: PrismaPermissionRepository,
+      },
+      userRoleRepositoryProvider: {
+        provide: USER_ROLE_REPOSITORY,
+        useClass: PrismaUserRoleRepository,
+      },
+      rolePermissionRepositoryProvider: {
+        provide: ROLE_PERMISSION_REPOSITORY,
+        useClass: PrismaRolePermissionRepository,
       },
     }),
   ],

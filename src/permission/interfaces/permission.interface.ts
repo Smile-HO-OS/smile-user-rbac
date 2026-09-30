@@ -1,14 +1,17 @@
 import { PermissionAction } from '../enums/permission-action.enum';
+import { PermissionStatus } from '../enums/permission-status.enum';
 
 /**
- * `name` is the fully-qualified permission key checked at the guard, e.g.
+ * `code` is the fully-qualified permission key checked at the guard, e.g.
  * "ticket.create" (see `resource` + `action`).
  */
 export interface IPermission {
   id: string;
-  name: string;
+  code: string;
   resource: string;
   action: PermissionAction;
+  description: string;
+  status: PermissionStatus;
   createdAt: Date;
   updatedAt: Date;
 }

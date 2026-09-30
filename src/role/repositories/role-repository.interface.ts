@@ -1,20 +1,31 @@
-import type { IBaseRepository } from '../../interfaces';
+import type {
+  IBaseRepository,
+  IPaginatedResult,
+  IPaginationParams,
+} from '../../interfaces';
 import type { RoleStatus } from '../enums/role-status.enum';
 import type { IRole } from '../interfaces/role.interface';
 
 export interface ICreateRoleInput {
   name: string;
+  code: string;
+  description: string;
   status?: RoleStatus;
 }
 
 export interface IUpdateRoleInput {
   name?: string;
+  code?: string;
+  description?: string;
   status?: RoleStatus;
 }
 
 /**
  * Contract a consuming application implements against its own database and
  * binds to the `ROLE_REPOSITORY` token when importing `RoleModule.forRoot(...)`.
+ * Owns Role CRUD only — the User↔Role and Role↔Permission relationships are
+ * owned by `IUserRoleRepository`/`IRolePermissionRepository` in the
+ * authorization module.
  */
 export interface IRoleRepository extends IBaseRepository<
   IRole,
@@ -22,8 +33,6 @@ export interface IRoleRepository extends IBaseRepository<
   ICreateRoleInput,
   IUpdateRoleInput
 > {
-  findByName(name: string): Promise<IRole | null>;
-  assignToUser(userId: string, roleId: string): Promise<void>;
-  removeFromUser(userId: string, roleId: string): Promise<void>;
-  findByUserId(userId: string): Promise<IRole[]>;
+  findByCode(code: string): Promise<IRole | null>;
+  search(params: IPaginationParams): Promise<IPaginatedResult<IRole>>;
 }

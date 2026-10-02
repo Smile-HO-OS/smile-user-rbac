@@ -33,7 +33,7 @@ framework-agnostic core is ever split out.
 | Reusable (same code in every app)                                                                 | Required per-app adapter (you write this)                                             |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `UserService`, `RoleService`, `PermissionService` — CRUD, search, activate/deactivate, assignment | 5 repository classes implementing the package's interfaces                            |
-| `AuthorizationService` — the actual `User → Roles → Permissions → Allow/Deny` decision            | 1 identity resolver mapping your app's authenticated-request shape to `{ iamUserId }` |
+| `AuthorizationService` — the actual `User → Roles → Permissions → Allow/Deny` decision            | 1 identity resolver mapping your app's authenticated-request shape to `{ subjectId }` |
 | `PermissionGuard` / `RoleGuard` — route guards                                                    | —                                                                                     |
 | `@RequirePermission()` / `@RequireRole()` — decorators                                            | —                                                                                     |
 | `UserRbacModule.forRoot(...)` — the composition root                                              | The `forRoot(...)` call itself, in your `AppModule`                                   |
@@ -80,7 +80,7 @@ example.
 ```text
 src/modules/rbac/
 ├── rbac.module.ts                    — forRoot() wiring
-├── identity.resolver.ts              — maps request.user → { iamUserId }
+├── identity.resolver.ts              — maps request.user → { subjectId }
 └── repositories/
     ├── user.repository.ts            — implements IUserRepository
     ├── role.repository.ts            — implements IRoleRepository
@@ -104,13 +104,13 @@ export class AppIdentityResolver implements IIdentityResolver {
     const user = context
       .switchToHttp()
       .getRequest<{ user?: { id?: string } }>().user;
-    return user?.id ? { iamUserId: user.id } : undefined;
+    return user?.id ? { subjectId: user.id } : undefined;
   }
 }
 ```
 
 Map whatever your own JWT/session already puts on `request.user` — `id`,
-`sub`, `userId`, whatever it is. The field is always called `iamUserId` on
+`sub`, `userId`, whatever it is. The field is always called `subjectId` on
 the package's side regardless of what your app calls it; it's just an
 opaque identity string, not a dependency on IAM itself.
 
@@ -127,7 +127,7 @@ export class AppUserRepository implements IUserRepository {
     const row = await this.db.user.findUnique({ where: { id } });
     return row ? toIUser(row) : null;
   }
-  findByIamUserId(id: string) {
+  findBySubjectId(id: string) {
     return this.findById(id);
   }
   async create(input: ICreateUserInput) {
@@ -285,14 +285,14 @@ export class AppUserRepository implements IUserRepository {
     return doc
       ? {
           id: doc._id.toString(),
-          iamUserId: doc._id.toString(),
+          subjectId: doc._id.toString(),
           status: doc.status,
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
         }
       : null;
   }
-  findByIamUserId(id: string) {
+  findBySubjectId(id: string) {
     return this.findById(id);
   }
   // create/update/delete/search follow the same shape, using Mongoose's own API

@@ -69,7 +69,7 @@ describe('UserRbacModule', () => {
     @Injectable()
     class CustomIdentityResolver implements IIdentityResolver {
       resolve(): IAuthenticatedIdentity | undefined {
-        return { iamUserId: 'resolved-by-custom-resolver' };
+        return { subjectId: 'resolved-by-custom-resolver' };
       }
     }
 
@@ -107,7 +107,7 @@ describe('UserRbacModule', () => {
     const authorizationService = moduleRef.get(AuthorizationService);
     vi.spyOn(authorizationService, 'authorize').mockResolvedValue(undefined);
     const userService = moduleRef.get(UserService);
-    vi.spyOn(userService, 'getUserByIamUserId').mockResolvedValue({
+    vi.spyOn(userService, 'getUserBySubjectId').mockResolvedValue({
       id: 'resolved-by-custom-resolver',
     } as never);
 
@@ -118,7 +118,7 @@ describe('UserRbacModule', () => {
     } as never;
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(userService.getUserByIamUserId).toHaveBeenCalledWith(
+    expect(userService.getUserBySubjectId).toHaveBeenCalledWith(
       'resolved-by-custom-resolver',
     );
   });

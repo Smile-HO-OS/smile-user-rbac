@@ -25,7 +25,7 @@ flowchart TB
   subgraph Pkg["nestjs-user-rbac"]
     PG["PermissionGuard"]
     RG["RoleGuard"]
-    IR["IDENTITY_RESOLVER<br/>(default: request.user.iamUserId)"]
+    IR["IDENTITY_RESOLVER<br/>(default: request.user.subjectId)"]
     US["UserService"]
     AS["AuthorizationService"]
     RS["RoleService"]
@@ -51,12 +51,12 @@ erDiagram
   ROLE ||--o{ USER_ROLE : assigned
   ROLE ||--o{ ROLE_PERMISSION : grants
   PERMISSION ||--o{ ROLE_PERMISSION : granted
-  USER { string id string iamUserId string status }
+  USER { string id string subjectId string status }
   ROLE { string id string name string code string status }
   PERMISSION { string id string code string resource string action string status }
 ```
 
-- `User.iamUserId` links the local user to the caller's identity in IAM.
+- `User.subjectId` links the local user to whatever identity the application's own authentication produces — a central identity provider's id, or just that application's own local user id.
 - Permission `code` is a plain string such as `ticket.create`. Each application defines its own vocabulary.
 - Role `code` (for example `support_manager`) is what `@RequireRole` matches.
 - Only **active** users, roles and permissions count toward a decision.
@@ -72,13 +72,13 @@ sequenceDiagram
   participant Z as AuthorizationService
   participant R as Repositories (app)
   C->>A: Request + credentials
-  A->>G: request.user = { iamUserId }
+  A->>G: request.user = { subjectId }
   G->>G: Read required codes from decorator metadata
   alt no identity
     G-->>C: 401 Unauthorized
   end
-  G->>U: getUserByIamUserId(iamUserId)
-  U->>R: findByIamUserId
+  G->>U: getUserBySubjectId(subjectId)
+  U->>R: findBySubjectId
   G->>Z: authorize(userId, code) / getUserRoles(userId)
   Z->>R: user, user-roles, role-permissions
   alt allowed
@@ -93,8 +93,8 @@ sequenceDiagram
 | Situation                                                    | Result                                       |
 | ------------------------------------------------------------ | -------------------------------------------- |
 | Route has no `@RequirePermission` / `@RequireRole`           | Request passes                               |
-| No authenticated identity (`request.user.iamUserId` missing) | 401                                          |
-| `iamUserId` has no local user                                | 403                                          |
+| No authenticated identity (`request.user.subjectId` missing) | 401                                          |
+| `subjectId` has no local user                                | 403                                          |
 | Permission or role missing, or user/role/permission inactive | 403                                          |
 | Several codes in one decorator                               | **All** are required                         |
 | Method-level and class-level decorator both present          | Method-level wins (replaces, does not merge) |
@@ -110,7 +110,7 @@ To require both a permission and a role on one route, stack both guards and both
 
 | Interface                   | Methods                                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `IUserRepository`           | `findById`, `create`, `update`, `delete`, `findByIamUserId`, `search`                       |
+| `IUserRepository`           | `findById`, `create`, `update`, `delete`, `findBySubjectId`, `search`                       |
 | `IRoleRepository`           | `findById`, `create`, `update`, `delete`, `findByCode`, `search`                            |
 | `IPermissionRepository`     | `findById`, `create`, `update`, `delete`, `findByCode`, `search`                            |
 | `IUserRoleRepository`       | `assign`, `remove`, `findRolesByUserId`, `findAssignment`                                   |
@@ -150,7 +150,7 @@ Each app needs tables for users, roles, permissions, user-role and role-permissi
 export class AppModule {}
 ```
 
-**4. Authenticate upstream, and attach the identity.** Your auth guard or middleware (not this package) must run first and set `request.user = { iamUserId: '<id from IAM>' }`. If your app's authenticated request carries the identity under a different shape, provide your own `IIdentityResolver` via `identityResolverProvider` on `forRoot(...)` — not as a local provider in your own module, which would never actually reach `PermissionGuard`/`RoleGuard` (they live inside this package's own `AuthorizationModule`, and a provider a module declares locally always wins over one from elsewhere for resolving that module's own providers).
+**4. Authenticate upstream, and attach the identity.** Your auth guard or middleware (not this package) must run first and set `request.user = { subjectId: '<your app's own identity for this caller>' }`. If your app's authenticated request carries the identity under a different shape, provide your own `IIdentityResolver` via `identityResolverProvider` on `forRoot(...)` — not as a local provider in your own module, which would never actually reach `PermissionGuard`/`RoleGuard` (they live inside this package's own `AuthorizationModule`, and a provider a module declares locally always wins over one from elsewhere for resolving that module's own providers).
 
 ```ts
 UserRbacModule.forRoot({
@@ -162,7 +162,7 @@ UserRbacModule.forRoot({
 });
 ```
 
-**5. Provision local users.** A caller needs a local `User` row whose `iamUserId` matches the IAM identity, or every guarded route returns 403. Create it with `UserService.createUser({ iamUserId })`, for example on first login or through an admin flow.
+**5. Provision local users.** A caller needs a local `User` row whose `subjectId` matches the identity your app's own authentication produced, or every guarded route returns 403. Create it with `UserService.createUser({ subjectId })`, for example on first login or through an admin flow.
 
 **6. Seed permissions, roles and assignments** with `PermissionService`, `RoleService`, and their assign methods:
 
@@ -211,6 +211,6 @@ export class TicketController {
 ## 7. Verifying an integration
 
 1. Provision a user, a role and a permission, then assign them as in step 6.
-2. Call a guarded route with `request.user.iamUserId` set: expect 200.
+2. Call a guarded route with `request.user.subjectId` set: expect 200.
 3. Remove the assignment or deactivate the role: expect 403.
 4. Call without an identity: expect 401.

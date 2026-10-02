@@ -5,10 +5,10 @@ export interface RepositoriesModuleOptions {
     permissionRepositoryProvider: Provider;
     userRoleRepositoryProvider: Provider;
     rolePermissionRepositoryProvider: Provider;
-    /** Defaults to `RequestIdentityResolver` (reads `request.user.iamUserId`)
+    /** Defaults to `RequestIdentityResolver` (reads `request.user.subjectId`)
      * when omitted. Override this when the consuming app's authenticated
-     * request shape doesn't carry `iamUserId` under that exact name (e.g. it
-     * keys its own user by a local id and maps that id to `iamUserId` itself,
+     * request shape doesn't carry `subjectId` under that exact name (e.g. it
+     * keys its own user by a local id and maps that id to `subjectId` itself,
      * as IAM does) — see `IIdentityResolver`. */
     identityResolverProvider?: Provider;
 }

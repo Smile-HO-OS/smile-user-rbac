@@ -7,7 +7,7 @@ import type { IUser } from '../interfaces/user.interface';
  * (with class-validator decorators) are a later phase.
  */
 export interface ICreateUserInput {
-    iamUserId: string;
+    subjectId: string;
     status?: UserStatus;
 }
 export interface IUpdateUserInput {
@@ -19,6 +19,6 @@ export interface IUpdateUserInput {
  * `USER_REPOSITORY` token via `UserRbacModule.forRoot(...)`.
  */
 export interface IUserRepository extends IBaseRepository<IUser, string, ICreateUserInput, IUpdateUserInput> {
-    findByIamUserId(iamUserId: string): Promise<IUser | null>;
+    findBySubjectId(subjectId: string): Promise<IUser | null>;
     search(params: IPaginationParams): Promise<IPaginatedResult<IUser>>;
 }

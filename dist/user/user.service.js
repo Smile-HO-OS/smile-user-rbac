@@ -19,10 +19,11 @@ const duplicate_user_exception_1 = require("./exceptions/duplicate-user.exceptio
 const user_not_found_exception_1 = require("./exceptions/user-not-found.exception");
 const user_status_enum_1 = require("./enums/user-status.enum");
 /**
- * Manages the application's local User representation, keyed to IAM via
- * `iamUserId`. This does not authenticate the user or touch IAM's own
- * record — deactivating a local user here has no effect on the global IAM
- * identity; that synchronization is a later phase.
+ * Manages the application's local User representation, keyed by `subjectId`
+ * — an opaque identifier from whatever authentication the application uses.
+ * This does not authenticate the user or touch any upstream identity
+ * provider's own record; that synchronization, if the application needs
+ * one at all, is its own concern.
  */
 let UserService = class UserService {
     userRepository;
@@ -30,12 +31,12 @@ let UserService = class UserService {
         this.userRepository = userRepository;
     }
     async createUser(input) {
-        if (!input.iamUserId?.trim()) {
-            throw new common_1.BadRequestException('iamUserId is required');
+        if (!input.subjectId?.trim()) {
+            throw new common_1.BadRequestException('subjectId is required');
         }
-        const existing = await this.userRepository.findByIamUserId(input.iamUserId);
+        const existing = await this.userRepository.findBySubjectId(input.subjectId);
         if (existing) {
-            throw new duplicate_user_exception_1.DuplicateUserException(input.iamUserId);
+            throw new duplicate_user_exception_1.DuplicateUserException(input.subjectId);
         }
         return this.userRepository.create(input);
     }
@@ -49,13 +50,13 @@ let UserService = class UserService {
         }
         return user;
     }
-    async getUserByIamUserId(iamUserId) {
-        if (!iamUserId?.trim()) {
-            throw new common_1.BadRequestException('iamUserId is required');
+    async getUserBySubjectId(subjectId) {
+        if (!subjectId?.trim()) {
+            throw new common_1.BadRequestException('subjectId is required');
         }
-        const user = await this.userRepository.findByIamUserId(iamUserId);
+        const user = await this.userRepository.findBySubjectId(subjectId);
         if (!user) {
-            throw new user_not_found_exception_1.UserNotFoundException(iamUserId);
+            throw new user_not_found_exception_1.UserNotFoundException(subjectId);
         }
         return user;
     }

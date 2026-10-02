@@ -12,10 +12,11 @@ import type {
 } from './repositories/user-repository.interface';
 
 /**
- * Manages the application's local User representation, keyed to IAM via
- * `iamUserId`. This does not authenticate the user or touch IAM's own
- * record — deactivating a local user here has no effect on the global IAM
- * identity; that synchronization is a later phase.
+ * Manages the application's local User representation, keyed by `subjectId`
+ * — an opaque identifier from whatever authentication the application uses.
+ * This does not authenticate the user or touch any upstream identity
+ * provider's own record; that synchronization, if the application needs
+ * one at all, is its own concern.
  */
 @Injectable()
 export class UserService {
@@ -24,13 +25,13 @@ export class UserService {
   ) {}
 
   async createUser(input: ICreateUserInput): Promise<IUser> {
-    if (!input.iamUserId?.trim()) {
-      throw new BadRequestException('iamUserId is required');
+    if (!input.subjectId?.trim()) {
+      throw new BadRequestException('subjectId is required');
     }
 
-    const existing = await this.userRepository.findByIamUserId(input.iamUserId);
+    const existing = await this.userRepository.findBySubjectId(input.subjectId);
     if (existing) {
-      throw new DuplicateUserException(input.iamUserId);
+      throw new DuplicateUserException(input.subjectId);
     }
 
     return this.userRepository.create(input);
@@ -49,14 +50,14 @@ export class UserService {
     return user;
   }
 
-  async getUserByIamUserId(iamUserId: string): Promise<IUser> {
-    if (!iamUserId?.trim()) {
-      throw new BadRequestException('iamUserId is required');
+  async getUserBySubjectId(subjectId: string): Promise<IUser> {
+    if (!subjectId?.trim()) {
+      throw new BadRequestException('subjectId is required');
     }
 
-    const user = await this.userRepository.findByIamUserId(iamUserId);
+    const user = await this.userRepository.findBySubjectId(subjectId);
     if (!user) {
-      throw new UserNotFoundException(iamUserId);
+      throw new UserNotFoundException(subjectId);
     }
 
     return user;

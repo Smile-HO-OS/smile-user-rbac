@@ -11,7 +11,7 @@ import type { IIdentityResolver } from '../interfaces/identity-resolver.interfac
 
 /**
  * Shared guard flow: read the required codes from metadata, identify the
- * caller, map their `iamUserId` to the local user, then let the subclass ask
+ * caller, map their `subjectId` to the local user, then let the subclass ask
  * `AuthorizationService`. Holds no RBAC logic itself.
  *
  * - No metadata / empty list → nothing required, request passes.
@@ -37,13 +37,13 @@ export abstract class BaseAuthorizationGuard implements CanActivate {
     }
 
     const identity = await this.identityResolver.resolve(context);
-    if (!identity?.iamUserId) {
+    if (!identity?.subjectId) {
       throw new UnauthorizedException('Authenticated identity is required');
     }
 
     try {
-      const user = await this.userService.getUserByIamUserId(
-        identity.iamUserId,
+      const user = await this.userService.getUserBySubjectId(
+        identity.subjectId,
       );
       await this.check(user.id, required);
     } catch (error) {

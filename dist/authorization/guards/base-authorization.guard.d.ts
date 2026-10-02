@@ -4,7 +4,7 @@ import type { UserService } from '../../user/user.service';
 import type { IIdentityResolver } from '../interfaces/identity-resolver.interface';
 /**
  * Shared guard flow: read the required codes from metadata, identify the
- * caller, map their `iamUserId` to the local user, then let the subclass ask
+ * caller, map their `subjectId` to the local user, then let the subclass ask
  * `AuthorizationService`. Holds no RBAC logic itself.
  *
  * - No metadata / empty list → nothing required, request passes.

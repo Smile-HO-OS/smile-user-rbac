@@ -14,7 +14,7 @@ exports.USER_ROLE_REPOSITORY = Symbol('USER_ROLE_REPOSITORY');
 exports.ROLE_PERMISSION_REPOSITORY = Symbol('ROLE_PERMISSION_REPOSITORY');
 /**
  * Binds how guards find the authenticated caller on a request. A default
- * (`RequestIdentityResolver`, reading `request.user.iamUserId`) is provided;
+ * (`RequestIdentityResolver`, reading `request.user.subjectId`) is provided;
  * a consuming application can override it by providing this token itself.
  */
 exports.IDENTITY_RESOLVER = Symbol('IDENTITY_RESOLVER');

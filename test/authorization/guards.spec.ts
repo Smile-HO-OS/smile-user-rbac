@@ -45,7 +45,7 @@ class TestController {
 
 function buildContext(
   handler: () => void,
-  user?: { iamUserId?: unknown },
+  user?: { subjectId?: unknown },
 ): ExecutionContext {
   return {
     getHandler: () => handler,
@@ -63,7 +63,7 @@ function build() {
     getUserRoles: vi.fn().mockResolvedValue([]),
   };
   const userService = {
-    getUserByIamUserId: vi.fn().mockResolvedValue({ id: 'user-1' }),
+    getUserBySubjectId: vi.fn().mockResolvedValue({ id: 'user-1' }),
   };
   const resolver = new RequestIdentityResolver();
   const args = [
@@ -100,10 +100,10 @@ describe('PermissionGuard', () => {
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { iamUserId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'iam-1' }),
       ),
     ).resolves.toBe(true);
-    expect(userService.getUserByIamUserId).toHaveBeenCalledWith('iam-1');
+    expect(userService.getUserBySubjectId).toHaveBeenCalledWith('iam-1');
     expect(authorizationService.authorize).toHaveBeenCalledWith(
       'user-1',
       'ticket.create',
@@ -118,7 +118,7 @@ describe('PermissionGuard', () => {
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { iamUserId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'iam-1' }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -133,7 +133,7 @@ describe('PermissionGuard', () => {
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.multiple, { iamUserId: 'iam-1' }),
+        buildContext(proto.multiple, { subjectId: 'iam-1' }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(authorizationService.authorize).toHaveBeenCalledTimes(2);
@@ -144,13 +144,13 @@ describe('PermissionGuard', () => {
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.multiple, { iamUserId: 'iam-1' }),
+        buildContext(proto.multiple, { subjectId: 'iam-1' }),
       ),
     ).resolves.toBe(true);
     expect(authorizationService.authorize).toHaveBeenCalledTimes(2);
   });
 
-  it.each([undefined, {}, { iamUserId: '' }, { iamUserId: 42 }])(
+  it.each([undefined, {}, { subjectId: '' }, { subjectId: 42 }])(
     'rejects missing identity with 401 (%j)',
     async (user) => {
       const { permissionGuard, userService } = build();
@@ -158,19 +158,19 @@ describe('PermissionGuard', () => {
       await expect(
         permissionGuard.canActivate(buildContext(proto.single, user)),
       ).rejects.toBeInstanceOf(UnauthorizedException);
-      expect(userService.getUserByIamUserId).not.toHaveBeenCalled();
+      expect(userService.getUserBySubjectId).not.toHaveBeenCalled();
     },
   );
 
   it('denies with 403 when the identity has no local user', async () => {
     const { permissionGuard, userService } = build();
-    userService.getUserByIamUserId.mockRejectedValue(
+    userService.getUserBySubjectId.mockRejectedValue(
       new UserNotFoundException('iam-1'),
     );
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { iamUserId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'iam-1' }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -182,7 +182,7 @@ describe('PermissionGuard', () => {
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { iamUserId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'iam-1' }),
       ),
     ).rejects.toBe(failure);
   });
@@ -193,7 +193,7 @@ describe('PermissionGuard', () => {
     await expect(
       permissionGuard.canActivate(buildContext(proto.open)),
     ).resolves.toBe(true);
-    expect(userService.getUserByIamUserId).not.toHaveBeenCalled();
+    expect(userService.getUserBySubjectId).not.toHaveBeenCalled();
   });
 });
 
@@ -205,7 +205,7 @@ describe('RoleGuard', () => {
     );
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { iamUserId: 'iam-1' })),
+      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
     ).resolves.toBe(true);
     expect(authorizationService.getUserRoles).toHaveBeenCalledWith('user-1');
   });
@@ -215,7 +215,7 @@ describe('RoleGuard', () => {
     authorizationService.getUserRoles.mockResolvedValue(roles('other'));
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { iamUserId: 'iam-1' })),
+      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -225,14 +225,14 @@ describe('RoleGuard', () => {
       roles('support_manager'),
     );
     await expect(
-      roleGuard.canActivate(buildContext(proto.roles, { iamUserId: 'iam-1' })),
+      roleGuard.canActivate(buildContext(proto.roles, { subjectId: 'iam-1' })),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     authorizationService.getUserRoles.mockResolvedValue(
       roles('support_manager', 'auditor'),
     );
     await expect(
-      roleGuard.canActivate(buildContext(proto.roles, { iamUserId: 'iam-1' })),
+      roleGuard.canActivate(buildContext(proto.roles, { subjectId: 'iam-1' })),
     ).resolves.toBe(true);
   });
 
@@ -246,12 +246,12 @@ describe('RoleGuard', () => {
 
   it('denies with 403 when the identity has no local user', async () => {
     const { roleGuard, userService } = build();
-    userService.getUserByIamUserId.mockRejectedValue(
+    userService.getUserBySubjectId.mockRejectedValue(
       new UserNotFoundException('iam-1'),
     );
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { iamUserId: 'iam-1' })),
+      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -261,7 +261,7 @@ describe('RoleGuard', () => {
     authorizationService.getUserRoles.mockRejectedValue(failure);
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { iamUserId: 'iam-1' })),
+      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
     ).rejects.toBe(failure);
   });
 });

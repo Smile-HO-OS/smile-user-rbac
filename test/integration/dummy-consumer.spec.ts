@@ -40,10 +40,10 @@ class InMemoryUserRepository {
     return Promise.resolve(this.rows.get(id) ?? null);
   }
 
-  create(input: { iamUserId: string; status?: UserStatus }): Promise<IUser> {
+  create(input: { subjectId: string; status?: UserStatus }): Promise<IUser> {
     const row: IUser = {
       id: randomUUID(),
-      iamUserId: input.iamUserId,
+      subjectId: input.subjectId,
       status: input.status ?? UserStatus.ACTIVE,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -63,9 +63,9 @@ class InMemoryUserRepository {
     return Promise.resolve();
   }
 
-  findByIamUserId(iamUserId: string): Promise<IUser | null> {
+  findBySubjectId(subjectId: string): Promise<IUser | null> {
     return Promise.resolve(
-      [...this.rows.values()].find((u) => u.iamUserId === iamUserId) ?? null,
+      [...this.rows.values()].find((u) => u.subjectId === subjectId) ?? null,
     );
   }
 
@@ -283,13 +283,13 @@ class InMemoryRolePermissionRepository {
   }
 }
 
-function buildGuardContext(iamUserId: string): ExecutionContext {
+function buildGuardContext(subjectId: string): ExecutionContext {
   const handler = () => undefined;
   Reflect.defineMetadata(REQUIRED_PERMISSIONS_KEY, ['ticket.create'], handler);
   return {
     getHandler: () => handler,
     getClass: () => class DummyController {},
-    switchToHttp: () => ({ getRequest: () => ({ user: { iamUserId } }) }),
+    switchToHttp: () => ({ getRequest: () => ({ user: { subjectId } }) }),
   } as unknown as ExecutionContext;
 }
 
@@ -338,7 +338,7 @@ describe('Dummy consuming application (in-memory repositories)', () => {
     const authorizationService = moduleRef.get(AuthorizationService);
     const permissionGuard = moduleRef.get(PermissionGuard);
 
-    const user = await userService.createUser({ iamUserId: 'iam-user-1' });
+    const user = await userService.createUser({ subjectId: 'iam-user-1' });
     const role = await roleService.createRole({
       name: 'Booking Admin',
       code: 'booking_admin',

@@ -5,7 +5,7 @@ const common_1 = require("@nestjs/common");
 const user_not_found_exception_1 = require("../../user/exceptions/user-not-found.exception");
 /**
  * Shared guard flow: read the required codes from metadata, identify the
- * caller, map their `iamUserId` to the local user, then let the subclass ask
+ * caller, map their `subjectId` to the local user, then let the subclass ask
  * `AuthorizationService`. Holds no RBAC logic itself.
  *
  * - No metadata / empty list → nothing required, request passes.
@@ -30,11 +30,11 @@ class BaseAuthorizationGuard {
             return true;
         }
         const identity = await this.identityResolver.resolve(context);
-        if (!identity?.iamUserId) {
+        if (!identity?.subjectId) {
             throw new common_1.UnauthorizedException('Authenticated identity is required');
         }
         try {
-            const user = await this.userService.getUserByIamUserId(identity.iamUserId);
+            const user = await this.userService.getUserBySubjectId(identity.subjectId);
             await this.check(user.id, required);
         }
         catch (error) {

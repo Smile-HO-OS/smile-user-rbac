@@ -16,7 +16,7 @@ import type { IUserRepository } from '../../src/user/repositories/user-repositor
 function buildUser(overrides: Partial<IUser> = {}): IUser {
   return {
     id: 'user-1',
-    iamUserId: 'iam-1',
+    subjectId: 'iam-1',
     status: UserStatus.ACTIVE,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -57,7 +57,7 @@ function buildUserRepositoryMock(): IUserRepository {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-    findByIamUserId: vi.fn(),
+    findBySubjectId: vi.fn(),
     search: vi.fn(),
   };
 }

@@ -9,7 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RequestIdentityResolver = void 0;
 const common_1 = require("@nestjs/common");
 /**
- * Default resolver: reads `request.user.iamUserId`, the conventional place
+ * Default resolver: reads `request.user.subjectId`, the conventional place
  * an upstream authentication layer attaches the caller. This package does
  * not populate `request.user` itself.
  */
@@ -18,9 +18,9 @@ let RequestIdentityResolver = class RequestIdentityResolver {
         const request = context
             .switchToHttp()
             .getRequest();
-        const iamUserId = request?.user?.iamUserId;
-        return typeof iamUserId === 'string' && iamUserId.trim()
-            ? { iamUserId }
+        const subjectId = request?.user?.subjectId;
+        return typeof subjectId === 'string' && subjectId.trim()
+            ? { subjectId }
             : undefined;
     }
 };

@@ -58,7 +58,7 @@ commonly `useClass` pointing at its own Prisma-backed implementation:
 // inside e.g. the Support application
 class PrismaUserRepository implements IUserRepository {
   constructor(private readonly prisma: PrismaService) {}
-  // findById / create / update / delete / findByIamUserId / search
+  // findById / create / update / delete / findBySubjectId / search
 }
 
 @Module({
@@ -97,7 +97,7 @@ implements.
 
 ## Why interfaces have method signatures already
 
-The repository interfaces (`findById`, `create`, `findByIamUserId`,
+The repository interfaces (`findById`, `create`, `findBySubjectId`,
 `search`, ...) are contracts, not implementations — no method body runs any
 query. Defining them now, rather than deferring everything, is what makes
 the package "ready" for Phase 2: an application team can start writing its

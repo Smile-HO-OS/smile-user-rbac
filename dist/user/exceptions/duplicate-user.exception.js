@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DuplicateUserException = void 0;
 const common_1 = require("@nestjs/common");
 class DuplicateUserException extends common_1.ConflictException {
-    constructor(iamUserId) {
-        super(`A user already exists for iamUserId "${iamUserId}"`);
+    constructor(subjectId) {
+        super(`A user already exists for subjectId "${subjectId}"`);
     }
 }
 exports.DuplicateUserException = DuplicateUserException;

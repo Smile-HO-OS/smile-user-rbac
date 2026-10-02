@@ -9,7 +9,7 @@ import { UserService } from '../../src/user/user.service';
 function buildUser(overrides: Partial<IUser> = {}): IUser {
   return {
     id: 'user-1',
-    iamUserId: 'iam-1',
+    subjectId: 'iam-1',
     status: UserStatus.ACTIVE,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -23,7 +23,7 @@ function buildRepositoryMock(): IUserRepository {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-    findByIamUserId: vi.fn(),
+    findBySubjectId: vi.fn(),
     search: vi.fn(),
   };
 }
@@ -38,35 +38,35 @@ describe('UserService', () => {
   });
 
   describe('createUser', () => {
-    it('creates a user when the iamUserId is not already taken', async () => {
+    it('creates a user when the subjectId is not already taken', async () => {
       const user = buildUser();
-      vi.mocked(repository.findByIamUserId).mockResolvedValue(null);
+      vi.mocked(repository.findBySubjectId).mockResolvedValue(null);
       vi.mocked(repository.create).mockResolvedValue(user);
 
-      const result = await service.createUser({ iamUserId: user.iamUserId });
+      const result = await service.createUser({ subjectId: user.subjectId });
 
-      expect(repository.findByIamUserId).toHaveBeenCalledWith(user.iamUserId);
+      expect(repository.findBySubjectId).toHaveBeenCalledWith(user.subjectId);
       expect(repository.create).toHaveBeenCalledWith({
-        iamUserId: user.iamUserId,
+        subjectId: user.subjectId,
       });
       expect(result).toEqual(user);
     });
 
-    it('throws DuplicateUserException when the iamUserId already exists', async () => {
+    it('throws DuplicateUserException when the subjectId already exists', async () => {
       const user = buildUser();
-      vi.mocked(repository.findByIamUserId).mockResolvedValue(user);
+      vi.mocked(repository.findBySubjectId).mockResolvedValue(user);
 
       await expect(
-        service.createUser({ iamUserId: user.iamUserId }),
+        service.createUser({ subjectId: user.subjectId }),
       ).rejects.toThrow(DuplicateUserException);
       expect(repository.create).not.toHaveBeenCalled();
     });
 
-    it('throws BadRequestException when iamUserId is missing', async () => {
-      await expect(service.createUser({ iamUserId: '' })).rejects.toThrow(
+    it('throws BadRequestException when subjectId is missing', async () => {
+      await expect(service.createUser({ subjectId: '' })).rejects.toThrow(
         BadRequestException,
       );
-      expect(repository.findByIamUserId).not.toHaveBeenCalled();
+      expect(repository.findBySubjectId).not.toHaveBeenCalled();
     });
   });
 
@@ -87,20 +87,20 @@ describe('UserService', () => {
     });
   });
 
-  describe('getUserByIamUserId', () => {
+  describe('getUserBySubjectId', () => {
     it('returns the user when found', async () => {
       const user = buildUser();
-      vi.mocked(repository.findByIamUserId).mockResolvedValue(user);
+      vi.mocked(repository.findBySubjectId).mockResolvedValue(user);
 
-      await expect(service.getUserByIamUserId(user.iamUserId)).resolves.toEqual(
+      await expect(service.getUserBySubjectId(user.subjectId)).resolves.toEqual(
         user,
       );
     });
 
     it('throws UserNotFoundException when not found', async () => {
-      vi.mocked(repository.findByIamUserId).mockResolvedValue(null);
+      vi.mocked(repository.findBySubjectId).mockResolvedValue(null);
 
-      await expect(service.getUserByIamUserId('missing')).rejects.toThrow(
+      await expect(service.getUserBySubjectId('missing')).rejects.toThrow(
         UserNotFoundException,
       );
     });

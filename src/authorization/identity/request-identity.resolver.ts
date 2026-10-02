@@ -3,7 +3,7 @@ import type { IAuthenticatedIdentity } from '../interfaces/authenticated-identit
 import type { IIdentityResolver } from '../interfaces/identity-resolver.interface';
 
 /**
- * Default resolver: reads `request.user.iamUserId`, the conventional place
+ * Default resolver: reads `request.user.subjectId`, the conventional place
  * an upstream authentication layer attaches the caller. This package does
  * not populate `request.user` itself.
  */
@@ -12,11 +12,11 @@ export class RequestIdentityResolver implements IIdentityResolver {
   resolve(context: ExecutionContext): IAuthenticatedIdentity | undefined {
     const request = context
       .switchToHttp()
-      .getRequest<{ user?: { iamUserId?: unknown } }>();
-    const iamUserId = request?.user?.iamUserId;
+      .getRequest<{ user?: { subjectId?: unknown } }>();
+    const subjectId = request?.user?.subjectId;
 
-    return typeof iamUserId === 'string' && iamUserId.trim()
-      ? { iamUserId }
+    return typeof subjectId === 'string' && subjectId.trim()
+      ? { subjectId }
       : undefined;
   }
 }

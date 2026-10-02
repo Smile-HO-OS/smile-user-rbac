@@ -12,7 +12,7 @@ import type { IUser } from '../interfaces/user.interface';
  * (with class-validator decorators) are a later phase.
  */
 export interface ICreateUserInput {
-  iamUserId: string;
+  subjectId: string;
   status?: UserStatus;
 }
 
@@ -31,6 +31,6 @@ export interface IUserRepository extends IBaseRepository<
   ICreateUserInput,
   IUpdateUserInput
 > {
-  findByIamUserId(iamUserId: string): Promise<IUser | null>;
+  findBySubjectId(subjectId: string): Promise<IUser | null>;
   search(params: IPaginationParams): Promise<IPaginatedResult<IUser>>;
 }

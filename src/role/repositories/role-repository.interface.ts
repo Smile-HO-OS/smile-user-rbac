@@ -22,7 +22,7 @@ export interface IUpdateRoleInput {
 
 /**
  * Contract a consuming application implements against its own database and
- * binds to the `ROLE_REPOSITORY` token when importing `RoleModule.forRoot(...)`.
+ * binds to the `ROLE_REPOSITORY` token via `UserRbacModule.forRoot(...)`.
  * Owns Role CRUD only — the User↔Role and Role↔Permission relationships are
  * owned by `IUserRoleRepository`/`IRolePermissionRepository` in the
  * authorization module.

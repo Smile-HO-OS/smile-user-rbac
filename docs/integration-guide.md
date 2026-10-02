@@ -150,10 +150,16 @@ Each app needs tables for users, roles, permissions, user-role and role-permissi
 export class AppModule {}
 ```
 
-**4. Authenticate upstream, and attach the identity.** Your auth guard or middleware (not this package) must run first and set `request.user = { iamUserId: '<id from IAM>' }`. If your app stores the identity elsewhere, provide your own `IDENTITY_RESOLVER` (an `IIdentityResolver`) in the module that uses the guards.
+**4. Authenticate upstream, and attach the identity.** Your auth guard or middleware (not this package) must run first and set `request.user = { iamUserId: '<id from IAM>' }`. If your app's authenticated request carries the identity under a different shape, provide your own `IIdentityResolver` via `identityResolverProvider` on `forRoot(...)` — not as a local provider in your own module, which would never actually reach `PermissionGuard`/`RoleGuard` (they live inside this package's own `AuthorizationModule`, and a provider a module declares locally always wins over one from elsewhere for resolving that module's own providers).
 
 ```ts
-{ provide: IDENTITY_RESOLVER, useClass: MyIdentityResolver }
+UserRbacModule.forRoot({
+  // ...the five repository providers...
+  identityResolverProvider: {
+    provide: IDENTITY_RESOLVER,
+    useClass: MyIdentityResolver,
+  },
+});
 ```
 
 **5. Provision local users.** A caller needs a local `User` row whose `iamUserId` matches the IAM identity, or every guarded route returns 403. Create it with `UserService.createUser({ iamUserId })`, for example on first login or through an admin flow.

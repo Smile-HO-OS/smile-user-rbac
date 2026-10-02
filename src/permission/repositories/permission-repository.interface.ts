@@ -25,8 +25,7 @@ export interface IUpdatePermissionInput {
 
 /**
  * Contract a consuming application implements against its own database and
- * binds to the `PERMISSION_REPOSITORY` token when importing
- * `PermissionModule.forRoot(...)`.
+ * binds to the `PERMISSION_REPOSITORY` token via `UserRbacModule.forRoot(...)`.
  * Owns Permission CRUD only — the Role↔Permission relationship is owned by
  * `IRolePermissionRepository` in the authorization module.
  */

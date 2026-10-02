@@ -1,5 +1,9 @@
-# compiled output
-/dist
+# compiled output — dist/ IS committed deliberately: this package is
+# consumed as a git dependency (github:mahak-smile/smile-user-rbac#vX.Y.Z),
+# not published to a registry, and npm's script-security defaults block
+# the prepack/prepare build step on a git install (verified: dist/ never
+# gets built otherwise). Rebuild and commit it as part of cutting any
+# release tag.
 /node_modules
 /build
 

@@ -1,6 +1,6 @@
 {
   "name": "@shree-maruti/nestjs-user-rbac",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reusable User, Role and Permission (RBAC) backend module for Shree Maruti NestJS applications. Database-agnostic: consuming applications supply their own repository implementations.",
   "author": "",
   "private": true,

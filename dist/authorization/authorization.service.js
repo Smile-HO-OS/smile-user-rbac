@@ -18,15 +18,16 @@ const constants_1 = require("../constants");
 const permission_status_enum_1 = require("../permission/enums/permission-status.enum");
 const role_status_enum_1 = require("../role/enums/role-status.enum");
 const user_status_enum_1 = require("../user/enums/user-status.enum");
-const user_not_found_exception_1 = require("../user/exceptions/user-not-found.exception");
 const authorization_denied_exception_1 = require("./exceptions/authorization-denied.exception");
 /**
  * Resolves whether a user has a given permission by walking
  * User → UserRole → Role → RolePermission → Permission, considering only
- * active users, active roles and active permissions. Does not touch IAM
+ * active users, active roles and active permissions. Does not touch any
  * authentication or application-access checks — this only answers "does
  * this already-identified local user have this permission" for the
- * application's own RBAC data.
+ * application's own RBAC data. An unknown user is treated like an inactive
+ * one: nothing is granted, and nothing throws except blank input (400) and
+ * repository failures (propagated).
  */
 let AuthorizationService = class AuthorizationService {
     userRepository;
@@ -53,7 +54,7 @@ let AuthorizationService = class AuthorizationService {
     }
     async getUserPermissions(userId) {
         this.requireNonEmpty(userId, 'userId');
-        const user = await this.requireActiveUser(userId);
+        const user = await this.findActiveUser(userId);
         if (!user) {
             return [];
         }
@@ -61,16 +62,16 @@ let AuthorizationService = class AuthorizationService {
     }
     async getUserRoles(userId) {
         this.requireNonEmpty(userId, 'userId');
-        const user = await this.requireActiveUser(userId);
+        const user = await this.findActiveUser(userId);
         if (!user) {
             return [];
         }
         return this.resolveActiveRoles(userId);
     }
     async evaluate(userId, permissionCode) {
-        const user = await this.requireActiveUser(userId);
+        const user = await this.findActiveUser(userId);
         if (!user) {
-            return { allowed: false, reason: 'user is not active' };
+            return { allowed: false, reason: 'user is not active or does not exist' };
         }
         const permissions = await this.resolveEffectivePermissions(userId);
         const granted = permissions.some((permission) => permission.code === permissionCode);
@@ -81,13 +82,10 @@ let AuthorizationService = class AuthorizationService {
                 reason: `permission "${permissionCode}" is not granted`,
             };
     }
-    /** Throws if the user doesn't exist; returns `null` (not an error) if inactive. */
-    async requireActiveUser(userId) {
+    /** `null` (not an error) when the user is missing or inactive. */
+    async findActiveUser(userId) {
         const user = await this.userRepository.findById(userId);
-        if (!user) {
-            throw new user_not_found_exception_1.UserNotFoundException(userId);
-        }
-        return user.status === user_status_enum_1.UserStatus.ACTIVE ? user : null;
+        return user?.status === user_status_enum_1.UserStatus.ACTIVE ? user : null;
     }
     async resolveActiveRoles(userId) {
         const roles = await this.userRoleRepository.findRolesByUserId(userId);

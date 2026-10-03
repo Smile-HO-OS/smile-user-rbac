@@ -3,7 +3,6 @@ import { Reflector } from '@nestjs/core';
 import { IDENTITY_RESOLVER, REQUIRED_PERMISSIONS_KEY } from '../../constants';
 import { UserService } from '../../user/user.service';
 import { AuthorizationService } from '../authorization.service';
-import { AuthorizationDeniedException } from '../exceptions/authorization-denied.exception';
 import type { IIdentityResolver } from '../interfaces/identity-resolver.interface';
 import { BaseAuthorizationGuard } from './base-authorization.guard';
 
@@ -20,15 +19,16 @@ export class PermissionGuard extends BaseAuthorizationGuard {
   }
 
   protected async check(userId: string, required: string[]): Promise<void> {
-    try {
-      for (const permissionCode of required) {
-        await this.authorizationService.authorize(userId, permissionCode);
-      }
-    } catch (error) {
-      if (error instanceof AuthorizationDeniedException) {
-        throw new ForbiddenException(error.message);
-      }
-      throw error;
+    const held = new Set(
+      (await this.authorizationService.getUserPermissions(userId)).map(
+        (permission) => permission.code,
+      ),
+    );
+    const missing = required.filter((code) => !held.has(code));
+    if (missing.length > 0) {
+      throw new ForbiddenException(
+        `Missing required permission(s): ${missing.join(', ')}`,
+      );
     }
   }
 }

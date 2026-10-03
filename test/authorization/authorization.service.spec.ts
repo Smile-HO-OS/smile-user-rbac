@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import type { IRolePermissionRepository } from '../../src/authorization/repositories/role-permission-repository.interface';
 import type { IUserRoleRepository } from '../../src/authorization/repositories/user-role-repository.interface';
 import { AuthorizationDeniedException } from '../../src/authorization/exceptions/authorization-denied.exception';
@@ -9,7 +9,6 @@ import type { IPermission } from '../../src/permission/interfaces/permission.int
 import { RoleStatus } from '../../src/role/enums/role-status.enum';
 import type { IRole } from '../../src/role/interfaces/role.interface';
 import { UserStatus } from '../../src/user/enums/user-status.enum';
-import { UserNotFoundException } from '../../src/user/exceptions/user-not-found.exception';
 import type { IUser } from '../../src/user/interfaces/user.interface';
 import type { IUserRepository } from '../../src/user/repositories/user-repository.interface';
 
@@ -187,12 +186,21 @@ describe('AuthorizationService', () => {
       ).resolves.toBe(false);
     });
 
-    it('throws UserNotFoundException for a missing user', async () => {
+    it('returns false (does not throw) for a missing user', async () => {
       vi.mocked(userRepository.findById).mockResolvedValue(null);
 
       await expect(
         service.hasPermission('missing-user', 'ticket.create'),
-      ).rejects.toThrow(UserNotFoundException);
+      ).resolves.toBe(false);
+    });
+
+    it('propagates repository failures', async () => {
+      const failure = new Error('db down');
+      vi.mocked(userRepository.findById).mockRejectedValue(failure);
+
+      await expect(
+        service.hasPermission('user-1', 'ticket.create'),
+      ).rejects.toBe(failure);
     });
 
     it('throws BadRequestException for an empty userId', async () => {
@@ -238,12 +246,12 @@ describe('AuthorizationService', () => {
       );
     });
 
-    it('throws UserNotFoundException for a missing user', async () => {
+    it('throws AuthorizationDeniedException (a 403) for a missing user', async () => {
       vi.mocked(userRepository.findById).mockResolvedValue(null);
 
-      await expect(
-        service.authorize('missing-user', 'ticket.create'),
-      ).rejects.toThrow(UserNotFoundException);
+      const denial = service.authorize('missing-user', 'ticket.create');
+      await expect(denial).rejects.toThrow(AuthorizationDeniedException);
+      await expect(denial).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 
@@ -311,11 +319,11 @@ describe('AuthorizationService', () => {
       expect(userRoleRepository.findRolesByUserId).not.toHaveBeenCalled();
     });
 
-    it('throws UserNotFoundException for a missing user', async () => {
+    it('returns an empty array for a missing user', async () => {
       vi.mocked(userRepository.findById).mockResolvedValue(null);
 
-      await expect(service.getUserPermissions('missing-user')).rejects.toThrow(
-        UserNotFoundException,
+      await expect(service.getUserPermissions('missing-user')).resolves.toEqual(
+        [],
       );
     });
   });
@@ -349,12 +357,10 @@ describe('AuthorizationService', () => {
       await expect(service.getUserRoles(user.id)).resolves.toEqual([]);
     });
 
-    it('throws UserNotFoundException for a missing user', async () => {
+    it('returns an empty array for a missing user', async () => {
       vi.mocked(userRepository.findById).mockResolvedValue(null);
 
-      await expect(service.getUserRoles('missing-user')).rejects.toThrow(
-        UserNotFoundException,
-      );
+      await expect(service.getUserRoles('missing-user')).resolves.toEqual([]);
     });
   });
 });

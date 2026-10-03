@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.IDENTITY_RESOLVER = exports.ROLE_PERMISSION_REPOSITORY = exports.USER_ROLE_REPOSITORY = exports.PERMISSION_REPOSITORY = exports.ROLE_REPOSITORY = exports.USER_REPOSITORY = void 0;
 /**
  * DI tokens used to bind a repository interface to the implementation a
- * consuming application supplies (e.g. a Prisma-backed repository). Using
+ * consuming application supplies (e.g. a database-backed repository). Using
  * symbols keeps the token collision-free across applications that each
  * import this package independently.
  */

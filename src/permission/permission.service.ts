@@ -82,10 +82,10 @@ export class PermissionService {
   async searchPermissions(
     params: IPaginationParams,
   ): Promise<IPaginatedResult<IPermission>> {
-    if (!params.page || params.page < 1) {
+    if (!Number.isInteger(params.page) || params.page < 1) {
       throw new BadRequestException('page must be a positive integer');
     }
-    if (!params.pageSize || params.pageSize < 1) {
+    if (!Number.isInteger(params.pageSize) || params.pageSize < 1) {
       throw new BadRequestException('pageSize must be a positive integer');
     }
 

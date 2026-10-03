@@ -22,7 +22,7 @@ export interface IUpdateUserInput {
 
 /**
  * Contract a consuming application implements against its own database
- * (e.g. `PrismaUserRepository implements IUserRepository`) and binds to the
+ * (e.g. `AppUserRepository implements IUserRepository`) and binds to the
  * `USER_REPOSITORY` token via `UserRbacModule.forRoot(...)`.
  */
 export interface IUserRepository extends IBaseRepository<

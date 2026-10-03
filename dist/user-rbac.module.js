@@ -17,7 +17,7 @@ const user_1 = require("./user");
 /**
  * Single entry point a consuming application imports. Each application
  * supplies its own repository implementations at `forRoot(...)`; this
- * package never touches the application's database or Prisma schema
+ * package never touches the application's database schema
  * directly. All five repository providers are registered exactly once, via
  * `RepositoriesModule`, so `UserService`/`RoleService`/`PermissionService`
  * share single instances of whichever repositories they have in common

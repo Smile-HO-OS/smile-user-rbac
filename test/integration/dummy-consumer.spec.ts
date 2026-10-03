@@ -1,4 +1,12 @@
-import { ExecutionContext } from '@nestjs/common';
+import {
+  Controller,
+  ExecutionContext,
+  Get,
+  MiddlewareConsumer,
+  Module,
+  type NestMiddleware,
+} from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import {
@@ -13,6 +21,7 @@ import {
   PERMISSION_REPOSITORY,
   PermissionAction,
   PermissionGuard,
+  RequirePermission,
   PermissionService,
   PermissionStatus,
   REQUIRED_PERMISSIONS_KEY,
@@ -338,7 +347,7 @@ describe('Dummy consuming application (in-memory repositories)', () => {
     const authorizationService = moduleRef.get(AuthorizationService);
     const permissionGuard = moduleRef.get(PermissionGuard);
 
-    const user = await userService.createUser({ subjectId: 'iam-user-1' });
+    const user = await userService.createUser({ subjectId: 'subject-1' });
     const role = await roleService.createRole({
       name: 'Booking Admin',
       code: 'booking_admin',
@@ -362,10 +371,224 @@ describe('Dummy consuming application (in-memory repositories)', () => {
     ).resolves.toBe(false);
 
     await expect(
-      permissionGuard.canActivate(buildGuardContext('iam-user-1')),
+      permissionGuard.canActivate(buildGuardContext('subject-1')),
     ).resolves.toBe(true);
     await expect(
-      permissionGuard.canActivate(buildGuardContext('iam-user-unassigned')),
+      permissionGuard.canActivate(buildGuardContext('subject-unassigned')),
     ).rejects.toBeTruthy();
+  });
+
+  it('works wired the way the README says: an app RbacModule re-exporting forRoot(), plus APP_GUARD', async () => {
+    const roleRepository = new InMemoryRoleRepository();
+    const permissionRepository = new InMemoryPermissionRepository();
+
+    @Module({
+      imports: [
+        UserRbacModule.forRoot({
+          userRepositoryProvider: {
+            provide: USER_REPOSITORY,
+            useClass: InMemoryUserRepository,
+          },
+          roleRepositoryProvider: {
+            provide: ROLE_REPOSITORY,
+            useValue: roleRepository,
+          },
+          permissionRepositoryProvider: {
+            provide: PERMISSION_REPOSITORY,
+            useValue: permissionRepository,
+          },
+          userRoleRepositoryProvider: {
+            provide: USER_ROLE_REPOSITORY,
+            useValue: new InMemoryUserRoleRepository(roleRepository),
+          },
+          rolePermissionRepositoryProvider: {
+            provide: ROLE_PERMISSION_REPOSITORY,
+            useValue: new InMemoryRolePermissionRepository(
+              permissionRepository,
+            ),
+          },
+        }),
+      ],
+      exports: [UserRbacModule],
+    })
+    class RbacModule {}
+
+    @Module({
+      imports: [RbacModule],
+      providers: [{ provide: APP_GUARD, useClass: PermissionGuard }],
+    })
+    class AppModule {}
+
+    // Compiling proves PermissionGuard's dependencies (UserService,
+    // AuthorizationService, IDENTITY_RESOLVER, Reflector) all resolve when
+    // the guard is registered in the consumer's own module.
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    const userService = moduleRef.get(UserService, { strict: false });
+    const roleService = moduleRef.get(RoleService, { strict: false });
+    const permissionService = moduleRef.get(PermissionService, {
+      strict: false,
+    });
+    const authorizationService = moduleRef.get(AuthorizationService, {
+      strict: false,
+    });
+
+    const user = await userService.createUser({ subjectId: 'subject-multi' });
+    const [roleA, roleB, inactiveRole] = await Promise.all(
+      ['role_a', 'role_b', 'role_c'].map((code) =>
+        roleService.createRole({ name: code, code, description: '' }),
+      ),
+    );
+    const make = (code: string) =>
+      permissionService.createPermission({
+        code,
+        resource: 'ticket',
+        action: PermissionAction.CREATE,
+        description: '',
+      });
+    const [shared, onlyA, onlyB, viaInactiveRole] = await Promise.all([
+      make('ticket.shared'),
+      make('ticket.only_a'),
+      make('ticket.only_b'),
+      make('ticket.via_inactive_role'),
+    ]);
+
+    for (const role of [roleA, roleB, inactiveRole]) {
+      await roleService.assignRoleToUser(user.id, role.id);
+    }
+    await permissionService.assignPermissionToRole(roleA.id, shared.id);
+    await permissionService.assignPermissionToRole(roleA.id, onlyA.id);
+    await permissionService.assignPermissionToRole(roleB.id, shared.id);
+    await permissionService.assignPermissionToRole(roleB.id, onlyB.id);
+    await permissionService.assignPermissionToRole(
+      inactiveRole.id,
+      viaInactiveRole.id,
+    );
+    await roleService.deactivateRole(inactiveRole.id);
+
+    // Multiple roles merge; the permission both roles grant appears once.
+    const codes = (await authorizationService.getUserPermissions(user.id))
+      .map((permission) => permission.code)
+      .sort();
+    expect(codes).toEqual(['ticket.only_a', 'ticket.only_b', 'ticket.shared']);
+
+    // An inactive role grants nothing; deactivating the user revokes all.
+    await expect(
+      authorizationService.hasPermission(user.id, 'ticket.via_inactive_role'),
+    ).resolves.toBe(false);
+    await userService.deactivateUser(user.id);
+    await expect(
+      authorizationService.hasPermission(user.id, 'ticket.shared'),
+    ).resolves.toBe(false);
+  });
+
+  it('over real HTTP: 401 without identity, 403 for unknown or unauthorized callers, 200 when granted, 500 on repository failure', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const roleRepository = new InMemoryRoleRepository();
+    const permissionRepository = new InMemoryPermissionRepository();
+
+    // The app's own authentication stand-in: trusts an `x-subject` header.
+    class FakeAuthMiddleware implements NestMiddleware {
+      use(
+        req: { headers: Record<string, string>; user?: unknown },
+        _res: unknown,
+        next: () => void,
+      ) {
+        const subjectId = req.headers['x-subject'];
+        if (subjectId) req.user = { subjectId };
+        next();
+      }
+    }
+
+    @Controller('tickets')
+    class TicketsController {
+      @Get()
+      @RequirePermission('ticket.create')
+      list() {
+        return { ok: true };
+      }
+    }
+
+    @Module({
+      imports: [
+        UserRbacModule.forRoot({
+          userRepositoryProvider: {
+            provide: USER_REPOSITORY,
+            useValue: userRepository,
+          },
+          roleRepositoryProvider: {
+            provide: ROLE_REPOSITORY,
+            useValue: roleRepository,
+          },
+          permissionRepositoryProvider: {
+            provide: PERMISSION_REPOSITORY,
+            useValue: permissionRepository,
+          },
+          userRoleRepositoryProvider: {
+            provide: USER_ROLE_REPOSITORY,
+            useValue: new InMemoryUserRoleRepository(roleRepository),
+          },
+          rolePermissionRepositoryProvider: {
+            provide: ROLE_PERMISSION_REPOSITORY,
+            useValue: new InMemoryRolePermissionRepository(
+              permissionRepository,
+            ),
+          },
+        }),
+      ],
+      controllers: [TicketsController],
+      providers: [{ provide: APP_GUARD, useClass: PermissionGuard }],
+    })
+    class AppModule {
+      configure(consumer: MiddlewareConsumer) {
+        consumer.apply(FakeAuthMiddleware).forRoutes('*');
+      }
+    }
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+    const app = moduleRef.createNestApplication({ logger: false });
+    await app.listen(0);
+    try {
+      const base = await app.getUrl();
+      const call = (subject?: string) =>
+        fetch(`${base}/tickets`, {
+          headers: subject ? { 'x-subject': subject } : {},
+        }).then((res) => res.status);
+
+      const userService = moduleRef.get(UserService);
+      const roleService = moduleRef.get(RoleService);
+      const permissionService = moduleRef.get(PermissionService);
+      const granted = await userService.createUser({ subjectId: 'granted' });
+      await userService.createUser({ subjectId: 'ungranted' });
+      const role = await roleService.createRole({
+        name: 'Agent',
+        code: 'agent',
+        description: '',
+      });
+      const permission = await permissionService.createPermission({
+        code: 'ticket.create',
+        resource: 'ticket',
+        action: PermissionAction.CREATE,
+        description: '',
+      });
+      await roleService.assignRoleToUser(granted.id, role.id);
+      await permissionService.assignPermissionToRole(role.id, permission.id);
+
+      await expect(call()).resolves.toBe(401);
+      await expect(call('no-local-user')).resolves.toBe(403);
+      await expect(call('ungranted')).resolves.toBe(403);
+      await expect(call('granted')).resolves.toBe(200);
+
+      vi.spyOn(userRepository, 'findBySubjectId').mockRejectedValue(
+        new Error('db down'),
+      );
+      await expect(call('granted')).resolves.toBe(500);
+    } finally {
+      await app.close();
+    }
   });
 });

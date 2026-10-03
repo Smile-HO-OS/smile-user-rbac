@@ -346,7 +346,7 @@ handler):
 const allowed = await authorizationService.hasPermission(
   userId,
   'orders.create',
-); // boolean, never throws
+); // true/false — see "Errors and edge cases" below for what can still reject
 await authorizationService.authorize(userId, 'orders.create'); // throws AuthorizationDeniedException if denied
 const roles = await authorizationService.getUserRoles(userId);
 const permissions = await authorizationService.getUserPermissions(userId);
@@ -354,7 +354,45 @@ const permissions = await authorizationService.getUserPermissions(userId);
 
 Only **active** users, roles and permissions count toward a decision — an
 inactive user, an inactive role they hold, or an inactive permission a role
-grants are all treated as "not granted," never as an error.
+grants are all treated as "not granted," never as an error. A user's
+permissions are the union of every active role's active permissions,
+de-duplicated by permission `code`.
+
+### Multiple codes: ALL are required
+
+`@RequirePermission('a', 'b')` and `@RequireRole('x', 'y')` mean **every**
+listed code must be held (AND, not OR). There is no "any of" form. To allow
+either of two permissions, define a permission/role that covers both, or
+check programmatically with `hasPermission`. A method-level decorator
+**replaces** a class-level one (it does not merge). A route with no
+decorator is not restricted by the guard.
+
+### Errors and edge cases
+
+| Situation                                                              | `PermissionGuard` / `RoleGuard`       | `AuthorizationService` called directly                                  |
+| ---------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------- |
+| No identity (resolver returns nothing, or blank `subjectId`)           | `401 UnauthorizedException`           | n/a                                                                     |
+| Identity has no local user                                             | `403 ForbiddenException`              | `hasPermission` → `false`; `authorize` → denial (403); `get*` → `[]`    |
+| Permission/role not held, or user/role/permission inactive             | `403 ForbiddenException`              | `hasPermission` → `false`; `authorize` → `AuthorizationDeniedException` |
+| Blank `userId` / `permissionCode`, bad pagination, invalid code format | n/a                                   | `BadRequestException` (400)                                             |
+| Repository / database failure                                          | propagated unchanged (not turned 403) | propagated unchanged                                                    |
+
+`hasPermission()` returns a boolean for **any** user id: an unknown or
+inactive user is simply `false`. It rejects only for blank arguments (400)
+and repository failures. `AuthorizationDeniedException` is a
+`ForbiddenException`, so it is a 403 with no mapping needed on your side.
+Both guards load the caller's permissions/roles once per request, however
+many codes are listed.
+
+The guards and the default `RequestIdentityResolver` are for **HTTP**
+requests (they read `request.user`). Use `AuthorizationService` directly
+from other transports (queues, CLI jobs).
+
+`UserRbacModule.forRoot(...)` must be imported **once** per application
+(typically from a single `RbacModule` that re-exports it). Importing it in
+several modules creates separate repository instances. The package cannot
+detect this at runtime without global state that would break parallel test
+modules, so it is a documented rule, not an enforced one.
 
 ## Scripts
 
@@ -372,7 +410,7 @@ npm run test:cov
 
 Husky's pre-commit hook runs `lint-staged` (eslint --fix + prettier --write
 on staged files); the commit-msg hook enforces Conventional Commits via
-commitlint, matching `iam-logistics-backend`'s convention.
+commitlint, using the standard Conventional Commits rules.
 
 ## Releasing this package
 

@@ -19,7 +19,7 @@ const request_identity_resolver_1 = require("./authorization/identity/request-id
  * (`RoleService` checks `USER_REPOSITORY`, `PermissionService` checks
  * `ROLE_REPOSITORY`), so those tokens are needed by more than one feature
  * module. Registering each provider per-module would mean the app's
- * repository classes (e.g. `PrismaUserRepository`) get instantiated once per
+ * repository classes (e.g. a `UserRepositoryImpl`) get instantiated once per
  * module that needs them. `@Global()` makes every export from this module
  * visible package-wide once imported here, so `UserModule`/`RoleModule`/
  * `PermissionModule`/`AuthorizationModule` can `@Inject()` these tokens

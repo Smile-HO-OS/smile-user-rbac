@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
-  AuthorizationDeniedException,
   AuthorizationService,
   PermissionGuard,
   REQUIRED_PERMISSIONS_KEY,
@@ -19,7 +18,7 @@ import {
   UserNotFoundException,
   UserService,
 } from '../../src';
-import type { IRole } from '../../src';
+import type { IPermission, IRole } from '../../src';
 
 @Controller()
 class TestController {
@@ -59,7 +58,7 @@ const reflector = new Reflector();
 
 function build() {
   const authorizationService = {
-    authorize: vi.fn().mockResolvedValue(undefined),
+    getUserPermissions: vi.fn().mockResolvedValue([]),
     getUserRoles: vi.fn().mockResolvedValue([]),
   };
   const userService = {
@@ -73,6 +72,7 @@ function build() {
     authorizationService as unknown as AuthorizationService,
   ] as const;
   return {
+    reflector,
     authorizationService,
     userService,
     permissionGuard: new PermissionGuard(...args),
@@ -82,6 +82,8 @@ function build() {
 
 const roles = (...codes: string[]) =>
   codes.map((code) => ({ code })) as unknown as IRole[];
+const permissions = (...codes: string[]) =>
+  codes.map((code) => ({ code })) as unknown as IPermission[];
 
 describe('decorators', () => {
   it('store required codes as metadata', () => {
@@ -95,59 +97,57 @@ describe('decorators', () => {
 });
 
 describe('PermissionGuard', () => {
-  it('allows and delegates to AuthorizationService using the local user id', async () => {
+  it('allows and checks against the local user id, not the subjectId', async () => {
     const { permissionGuard, authorizationService, userService } = build();
+    authorizationService.getUserPermissions.mockResolvedValue(
+      permissions('ticket.create'),
+    );
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { subjectId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'subject-1' }),
       ),
     ).resolves.toBe(true);
-    expect(userService.getUserBySubjectId).toHaveBeenCalledWith('iam-1');
-    expect(authorizationService.authorize).toHaveBeenCalledWith(
+    expect(userService.getUserBySubjectId).toHaveBeenCalledWith('subject-1');
+    expect(authorizationService.getUserPermissions).toHaveBeenCalledWith(
       'user-1',
-      'ticket.create',
     );
   });
 
-  it('denies with 403 when authorization is denied', async () => {
+  it('denies with 403 when the permission is not held', async () => {
     const { permissionGuard, authorizationService } = build();
-    authorizationService.authorize.mockRejectedValue(
-      new AuthorizationDeniedException('user-1', 'ticket.create', 'nope'),
+    authorizationService.getUserPermissions.mockResolvedValue(
+      permissions('other.permission'),
     );
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { subjectId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'subject-1' }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('requires ALL permissions when several are listed', async () => {
+  it('requires ALL permissions when several are listed, loading them once', async () => {
     const { permissionGuard, authorizationService } = build();
-    authorizationService.authorize.mockImplementation((_id, code: string) =>
-      code === 'ticket.close'
-        ? Promise.reject(new AuthorizationDeniedException('user-1', code, 'x'))
-        : Promise.resolve(),
+    authorizationService.getUserPermissions.mockResolvedValue(
+      permissions('ticket.create'),
     );
-
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.multiple, { subjectId: 'iam-1' }),
+        buildContext(proto.multiple, { subjectId: 'subject-1' }),
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(authorizationService.authorize).toHaveBeenCalledTimes(2);
-  });
+    ).rejects.toThrow('ticket.close');
 
-  it('allows when every listed permission is granted', async () => {
-    const { permissionGuard, authorizationService } = build();
-
+    authorizationService.getUserPermissions.mockClear();
+    authorizationService.getUserPermissions.mockResolvedValue(
+      permissions('ticket.create', 'ticket.close'),
+    );
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.multiple, { subjectId: 'iam-1' }),
+        buildContext(proto.multiple, { subjectId: 'subject-1' }),
       ),
     ).resolves.toBe(true);
-    expect(authorizationService.authorize).toHaveBeenCalledTimes(2);
+    expect(authorizationService.getUserPermissions).toHaveBeenCalledTimes(1);
   });
 
   it.each([undefined, {}, { subjectId: '' }, { subjectId: 42 }])(
@@ -162,15 +162,36 @@ describe('PermissionGuard', () => {
     },
   );
 
+  it.each(['', '   ', null, undefined])(
+    'rejects a custom resolver that yields a blank identity (%j) with 401, not 400',
+    async (subjectId) => {
+      const { reflector: r, userService, authorizationService } = build();
+      const resolver = {
+        resolve: () => (subjectId === undefined ? undefined : { subjectId }),
+      };
+      const guard = new PermissionGuard(
+        r,
+        resolver as never,
+        userService as unknown as UserService,
+        authorizationService as unknown as AuthorizationService,
+      );
+
+      await expect(
+        guard.canActivate(buildContext(proto.single)),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(userService.getUserBySubjectId).not.toHaveBeenCalled();
+    },
+  );
+
   it('denies with 403 when the identity has no local user', async () => {
     const { permissionGuard, userService } = build();
     userService.getUserBySubjectId.mockRejectedValue(
-      new UserNotFoundException('iam-1'),
+      new UserNotFoundException('subject-1'),
     );
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { subjectId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'subject-1' }),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -178,11 +199,11 @@ describe('PermissionGuard', () => {
   it('propagates unexpected errors instead of masking them as 403', async () => {
     const { permissionGuard, authorizationService } = build();
     const failure = new Error('db down');
-    authorizationService.authorize.mockRejectedValue(failure);
+    authorizationService.getUserPermissions.mockRejectedValue(failure);
 
     await expect(
       permissionGuard.canActivate(
-        buildContext(proto.single, { subjectId: 'iam-1' }),
+        buildContext(proto.single, { subjectId: 'subject-1' }),
       ),
     ).rejects.toBe(failure);
   });
@@ -205,7 +226,9 @@ describe('RoleGuard', () => {
     );
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
+      roleGuard.canActivate(
+        buildContext(proto.role, { subjectId: 'subject-1' }),
+      ),
     ).resolves.toBe(true);
     expect(authorizationService.getUserRoles).toHaveBeenCalledWith('user-1');
   });
@@ -215,7 +238,9 @@ describe('RoleGuard', () => {
     authorizationService.getUserRoles.mockResolvedValue(roles('other'));
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
+      roleGuard.canActivate(
+        buildContext(proto.role, { subjectId: 'subject-1' }),
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -225,14 +250,18 @@ describe('RoleGuard', () => {
       roles('support_manager'),
     );
     await expect(
-      roleGuard.canActivate(buildContext(proto.roles, { subjectId: 'iam-1' })),
+      roleGuard.canActivate(
+        buildContext(proto.roles, { subjectId: 'subject-1' }),
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     authorizationService.getUserRoles.mockResolvedValue(
       roles('support_manager', 'auditor'),
     );
     await expect(
-      roleGuard.canActivate(buildContext(proto.roles, { subjectId: 'iam-1' })),
+      roleGuard.canActivate(
+        buildContext(proto.roles, { subjectId: 'subject-1' }),
+      ),
     ).resolves.toBe(true);
   });
 
@@ -247,11 +276,13 @@ describe('RoleGuard', () => {
   it('denies with 403 when the identity has no local user', async () => {
     const { roleGuard, userService } = build();
     userService.getUserBySubjectId.mockRejectedValue(
-      new UserNotFoundException('iam-1'),
+      new UserNotFoundException('subject-1'),
     );
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
+      roleGuard.canActivate(
+        buildContext(proto.role, { subjectId: 'subject-1' }),
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -261,7 +292,9 @@ describe('RoleGuard', () => {
     authorizationService.getUserRoles.mockRejectedValue(failure);
 
     await expect(
-      roleGuard.canActivate(buildContext(proto.role, { subjectId: 'iam-1' })),
+      roleGuard.canActivate(
+        buildContext(proto.role, { subjectId: 'subject-1' }),
+      ),
     ).rejects.toBe(failure);
   });
 });

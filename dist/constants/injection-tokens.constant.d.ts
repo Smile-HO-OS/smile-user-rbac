@@ -1,6 +1,6 @@
 /**
  * DI tokens used to bind a repository interface to the implementation a
- * consuming application supplies (e.g. a Prisma-backed repository). Using
+ * consuming application supplies (e.g. a database-backed repository). Using
  * symbols keeps the token collision-free across applications that each
  * import this package independently.
  */

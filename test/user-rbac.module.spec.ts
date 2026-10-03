@@ -105,7 +105,9 @@ describe('UserRbacModule', () => {
 
     const guard = moduleRef.get(PermissionGuard);
     const authorizationService = moduleRef.get(AuthorizationService);
-    vi.spyOn(authorizationService, 'authorize').mockResolvedValue(undefined);
+    vi.spyOn(authorizationService, 'getUserPermissions').mockResolvedValue([
+      { code: 'x.read' } as never,
+    ]);
     const userService = moduleRef.get(UserService);
     vi.spyOn(userService, 'getUserBySubjectId').mockResolvedValue({
       id: 'resolved-by-custom-resolver',
@@ -120,6 +122,73 @@ describe('UserRbacModule', () => {
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(userService.getUserBySubjectId).toHaveBeenCalledWith(
       'resolved-by-custom-resolver',
+    );
+  });
+
+  it('instantiates each repository exactly once and shares it across every service that injects it', async () => {
+    const created: Record<string, number> = {};
+    const counted = (name: string) =>
+      class {
+        constructor() {
+          created[name] = (created[name] ?? 0) + 1;
+        }
+      };
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        UserRbacModule.forRoot({
+          userRepositoryProvider: {
+            provide: USER_REPOSITORY,
+            useClass: counted('user'),
+          },
+          roleRepositoryProvider: {
+            provide: ROLE_REPOSITORY,
+            useClass: counted('role'),
+          },
+          permissionRepositoryProvider: {
+            provide: PERMISSION_REPOSITORY,
+            useClass: counted('permission'),
+          },
+          userRoleRepositoryProvider: {
+            provide: USER_ROLE_REPOSITORY,
+            useClass: counted('userRole'),
+          },
+          rolePermissionRepositoryProvider: {
+            provide: ROLE_PERMISSION_REPOSITORY,
+            useClass: counted('rolePermission'),
+          },
+        }),
+      ],
+    }).compile();
+
+    expect(created).toEqual({
+      user: 1,
+      role: 1,
+      permission: 1,
+      userRole: 1,
+      rolePermission: 1,
+    });
+
+    // UserService, RoleService and AuthorizationService all inject
+    // USER_REPOSITORY; they must all hold the one registered instance.
+    const userRepository = moduleRef.get(USER_REPOSITORY);
+    const held = (service: object, field: string) =>
+      (service as Record<string, unknown>)[field];
+    expect(held(moduleRef.get(UserService), 'userRepository')).toBe(
+      userRepository,
+    );
+    expect(held(moduleRef.get(RoleService), 'userRepository')).toBe(
+      userRepository,
+    );
+    expect(held(moduleRef.get(AuthorizationService), 'userRepository')).toBe(
+      userRepository,
+    );
+    // ROLE_REPOSITORY is shared by RoleService and PermissionService.
+    expect(held(moduleRef.get(RoleService), 'roleRepository')).toBe(
+      moduleRef.get(ROLE_REPOSITORY),
+    );
+    expect(held(moduleRef.get(PermissionService), 'roleRepository')).toBe(
+      moduleRef.get(ROLE_REPOSITORY),
     );
   });
 });

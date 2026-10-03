@@ -7,10 +7,12 @@ import type { IUserRoleRepository } from './repositories/user-role-repository.in
 /**
  * Resolves whether a user has a given permission by walking
  * User → UserRole → Role → RolePermission → Permission, considering only
- * active users, active roles and active permissions. Does not touch IAM
+ * active users, active roles and active permissions. Does not touch any
  * authentication or application-access checks — this only answers "does
  * this already-identified local user have this permission" for the
- * application's own RBAC data.
+ * application's own RBAC data. An unknown user is treated like an inactive
+ * one: nothing is granted, and nothing throws except blank input (400) and
+ * repository failures (propagated).
  */
 export declare class AuthorizationService implements IAuthorizationService {
     private readonly userRepository;
@@ -22,8 +24,8 @@ export declare class AuthorizationService implements IAuthorizationService {
     getUserPermissions(userId: string): Promise<IPermission[]>;
     getUserRoles(userId: string): Promise<IRole[]>;
     private evaluate;
-    /** Throws if the user doesn't exist; returns `null` (not an error) if inactive. */
-    private requireActiveUser;
+    /** `null` (not an error) when the user is missing or inactive. */
+    private findActiveUser;
     private resolveActiveRoles;
     /**
      * Combines permissions across all of a user's active roles into one

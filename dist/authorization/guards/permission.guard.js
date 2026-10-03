@@ -18,7 +18,6 @@ const core_1 = require("@nestjs/core");
 const constants_1 = require("../../constants");
 const user_service_1 = require("../../user/user.service");
 const authorization_service_1 = require("../authorization.service");
-const authorization_denied_exception_1 = require("../exceptions/authorization-denied.exception");
 const base_authorization_guard_1 = require("./base-authorization.guard");
 /** Enforces `@RequirePermission(...)`: the caller must hold every listed permission. */
 let PermissionGuard = class PermissionGuard extends base_authorization_guard_1.BaseAuthorizationGuard {
@@ -28,16 +27,10 @@ let PermissionGuard = class PermissionGuard extends base_authorization_guard_1.B
         this.authorizationService = authorizationService;
     }
     async check(userId, required) {
-        try {
-            for (const permissionCode of required) {
-                await this.authorizationService.authorize(userId, permissionCode);
-            }
-        }
-        catch (error) {
-            if (error instanceof authorization_denied_exception_1.AuthorizationDeniedException) {
-                throw new common_1.ForbiddenException(error.message);
-            }
-            throw error;
+        const held = new Set((await this.authorizationService.getUserPermissions(userId)).map((permission) => permission.code));
+        const missing = required.filter((code) => !held.has(code));
+        if (missing.length > 0) {
+            throw new common_1.ForbiddenException(`Missing required permission(s): ${missing.join(', ')}`);
         }
     }
 };

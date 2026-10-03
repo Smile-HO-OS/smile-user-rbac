@@ -9,7 +9,7 @@ const user_not_found_exception_1 = require("../../user/exceptions/user-not-found
  * `AuthorizationService`. Holds no RBAC logic itself.
  *
  * - No metadata / empty list → nothing required, request passes.
- * - No authenticated identity → 401.
+ * - No authenticated identity (missing, or a blank `subjectId`) → 401.
  * - Identity with no local user, or authorization denied → 403.
  * - Any other error (e.g. repository failure) propagates unchanged.
  */
@@ -30,7 +30,7 @@ class BaseAuthorizationGuard {
             return true;
         }
         const identity = await this.identityResolver.resolve(context);
-        if (!identity?.subjectId) {
+        if (typeof identity?.subjectId !== 'string' || !identity.subjectId.trim()) {
             throw new common_1.UnauthorizedException('Authenticated identity is required');
         }
         try {

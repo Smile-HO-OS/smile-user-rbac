@@ -9,7 +9,6 @@ import type { IPermission } from '../permission/interfaces/permission.interface'
 import { RoleStatus } from '../role/enums/role-status.enum';
 import type { IRole } from '../role/interfaces/role.interface';
 import { UserStatus } from '../user/enums/user-status.enum';
-import { UserNotFoundException } from '../user/exceptions/user-not-found.exception';
 import type { IUser } from '../user/interfaces/user.interface';
 import type { IUserRepository } from '../user/repositories/user-repository.interface';
 import { AuthorizationDeniedException } from './exceptions/authorization-denied.exception';
@@ -21,10 +20,12 @@ import type { IUserRoleRepository } from './repositories/user-role-repository.in
 /**
  * Resolves whether a user has a given permission by walking
  * User → UserRole → Role → RolePermission → Permission, considering only
- * active users, active roles and active permissions. Does not touch IAM
+ * active users, active roles and active permissions. Does not touch any
  * authentication or application-access checks — this only answers "does
  * this already-identified local user have this permission" for the
- * application's own RBAC data.
+ * application's own RBAC data. An unknown user is treated like an inactive
+ * one: nothing is granted, and nothing throws except blank input (400) and
+ * repository failures (propagated).
  */
 @Injectable()
 export class AuthorizationService implements IAuthorizationService {
@@ -64,7 +65,7 @@ export class AuthorizationService implements IAuthorizationService {
   async getUserPermissions(userId: string): Promise<IPermission[]> {
     this.requireNonEmpty(userId, 'userId');
 
-    const user = await this.requireActiveUser(userId);
+    const user = await this.findActiveUser(userId);
     if (!user) {
       return [];
     }
@@ -75,7 +76,7 @@ export class AuthorizationService implements IAuthorizationService {
   async getUserRoles(userId: string): Promise<IRole[]> {
     this.requireNonEmpty(userId, 'userId');
 
-    const user = await this.requireActiveUser(userId);
+    const user = await this.findActiveUser(userId);
     if (!user) {
       return [];
     }
@@ -87,9 +88,9 @@ export class AuthorizationService implements IAuthorizationService {
     userId: string,
     permissionCode: string,
   ): Promise<IAuthorizationResult> {
-    const user = await this.requireActiveUser(userId);
+    const user = await this.findActiveUser(userId);
     if (!user) {
-      return { allowed: false, reason: 'user is not active' };
+      return { allowed: false, reason: 'user is not active or does not exist' };
     }
 
     const permissions = await this.resolveEffectivePermissions(userId);
@@ -105,13 +106,10 @@ export class AuthorizationService implements IAuthorizationService {
         };
   }
 
-  /** Throws if the user doesn't exist; returns `null` (not an error) if inactive. */
-  private async requireActiveUser(userId: string): Promise<IUser | null> {
+  /** `null` (not an error) when the user is missing or inactive. */
+  private async findActiveUser(userId: string): Promise<IUser | null> {
     const user = await this.userRepository.findById(userId);
-    if (!user) {
-      throw new UserNotFoundException(userId);
-    }
-    return user.status === UserStatus.ACTIVE ? user : null;
+    return user?.status === UserStatus.ACTIVE ? user : null;
   }
 
   private async resolveActiveRoles(userId: string): Promise<IRole[]> {

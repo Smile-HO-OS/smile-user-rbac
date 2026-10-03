@@ -1,13 +1,11 @@
+import { ForbiddenException } from '@nestjs/common';
 /**
- * Deliberately a plain `Error`, not a NestJS `HttpException` subclass (unlike
- * the User/Role/Permission not-found/duplicate exceptions). Authorization
- * decisions need to be reusable outside an HTTP request — e.g. a message
- * consumer or a CLI job — so this package doesn't bake in a 403 status here.
- * A consuming controller/guard maps this to the transport-specific response
- * it needs (e.g. `throw new ForbiddenException()` in an HTTP exception
- * filter) rather than the package doing it for every possible transport.
+ * Thrown by `AuthorizationService.authorize` when a user does not hold a
+ * permission. A `ForbiddenException`, so it maps to 403 on its own (like the
+ * package's other exceptions, which are all `HttpException`s) with no extra
+ * handling in the consuming application.
  */
-export declare class AuthorizationDeniedException extends Error {
+export declare class AuthorizationDeniedException extends ForbiddenException {
     readonly userId: string;
     readonly permissionCode: string;
     constructor(userId: string, permissionCode: string, reason: string);

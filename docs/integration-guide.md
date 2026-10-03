@@ -79,7 +79,7 @@ sequenceDiagram
   end
   G->>U: getUserBySubjectId(subjectId)
   U->>R: findBySubjectId
-  G->>Z: authorize(userId, code) / getUserRoles(userId)
+  G->>Z: getUserPermissions(userId) / getUserRoles(userId)
   Z->>R: user, user-roles, role-permissions
   alt allowed
     G-->>C: handler runs
@@ -199,7 +199,7 @@ export class TicketController {
 }
 ```
 
-**8. Programmatic checks** (outside HTTP): inject `AuthorizationService` and call `hasPermission`, `authorize` (throws `AuthorizationDeniedException`), `getUserPermissions` or `getUserRoles`.
+**8. Programmatic checks** (outside HTTP): inject `AuthorizationService` and call `hasPermission` (`false` for an unknown or inactive user), `authorize` (throws `AuthorizationDeniedException`, a 403), `getUserPermissions` or `getUserRoles`.
 
 ## 6. Not included (on purpose)
 
